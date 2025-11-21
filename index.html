@@ -1,1 +1,199 @@
-new
+<!-- 文件1：index.html（直接复制保存）-->
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>我的云导航</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Noto Sans SC', sans-serif; }
+        .drag-over { border: 3px dashed #a78bfa !important; }
+    </style>
+</head>
+<body class="bg-gray-950 text-gray-100 min-h-screen">
+    <div class="max-w-7xl mx-auto p-6">
+        <h1 class="text-5xl font-bold text-center my-10 bg-gradient-to-r from-violet-400 to-pink-500 bg-clip-text text-transparent">
+            我的云导航站
+        </h1>
+
+        <!-- 管理按钮 -->
+        <div class="text-center mb-8 space-x-4">
+            <button id="editBtn" class="px-6 py-3 bg-purple-600 hover:bg-purple-700 rounded-full font-medium transition">
+                ✏️ 编辑模式
+            </button>
+            <button id="addCategory" class="px-6 py-3 bg-green-600 hover:bg-green-700 rounded-full font-medium transition hidden">
+                + 添加分类
+            </button>
+            <button id="saveBtn" class="px-6 py-3 bg-blue-600 hover:bg-blue-700 rounded-full font-medium transition hidden">
+                💾 保存所有修改
+            </button>
+        </div>
+
+        <!-- 搜索框 -->
+        <input type="text" id="search" placeholder="搜索网站或分类..." 
+               class="w-full max-w-2xl mx-auto block px-8 py-4 text-lg bg-gray-900/80 rounded-full border border-gray-800 focus:outline-none focus:border-purple-500 mb-10">
+
+        <!-- 分类区域 -->
+        <div id="categories" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
+            <!-- 数据会自动加载 -->
+        </div>
+    </div>
+
+    <!-- 添加/编辑弹窗 -->
+    <div id="modal" class="fixed inset-0 bg-black/80 hidden items-center justify-center z-50">
+        <div class="bg-gray-900 p-8 rounded-2xl border border-gray-700 w-full max-w-lg">
+            <h3 id="modalTitle" class="text-2xl font-bold mb-6">添加分类</h3>
+            <input type="text" id="catTitle" placeholder="分类名称（如：AI工具）" class="w-full px-4 py-3 bg-gray-800 rounded-lg mb-4">
+            <div id="linksContainer"></div>
+            <div class="flex justify-between mt-6">
+                <button id="addLink" class="text-purple-400 hover:text-purple-300">+ 添加一个网站</button>
+                <div>
+                    <button id="cancelBtn" class="px-6 py-2 bg-gray-700 rounded-lg mr-3">取消</button>
+                    <button id="confirmBtn" class="px-6 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg">确定</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        const KV_NAMESPACE = MY_KV; // Cloudflare Worker 会自动注入
+        let data = [];
+        let editingIndex = -1;
+        let isEditMode = false;
+
+        // 加载数据
+        async function loadData() {
+            try {
+                const val = await KV_NAMESPACE.get("navigation_data");
+                data = val ? JSON.parse(val) : [
+                    { title: "搜索引擎", links: [{name:"Google",url:"https://google.com"}] },
+                    { title: "开发工具", links: [{name:"GitHub",url:"https://github.com"}] }
+                ];
+                render();
+            } catch(e) {
+                alert("加载失败，请检查是否绑定了 KV");
+            }
+        }
+
+        // 保存数据
+        async function saveData() {
+            await KV_NAMESPACE.put("navigation_data", JSON.stringify(data));
+            alert("✅ 已保存！");
+            toggleEditMode(false);
+        }
+
+        // 渲染
+        function render() {
+            const container = document.getElementById('categories');
+            container.innerHTML = '';
+            data.forEach((cat, i) => {
+                const div = document.createElement('div');
+                div.className = 'bg-gray-900/70 rounded-2xl border border-gray-800 p-6 backdrop-blur-sm';
+                div.innerHTML = `
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-2xl font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">${cat.title}</h2>
+                        <div class="edit-buttons hidden space-x-2">
+                            <button onclick="editCategory(${i})" class="text-yellow-400 text-sm">编辑</button>
+                            <button onclick="deleteCategory(${i})" class="text-red-400 text-sm">删除</button>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        ${cat.links.map(link => `
+                            <a href="${link.url}" target="_blank" class="flex items-center space-x-3 p-3 rounded-lg bg-gray-800/50 hover:bg-gray-700 transition group">
+                                <img src="https://www.google.com/s2/favicons?sz=64&domain=${new URL(link.url).hostname}" class="w-6 h-6">
+                                <span class="group-hover:text-purple-300">${link.name}</span>
+                            </a>
+                        `).join('')}
+                    </div>
+                `;
+                container.appendChild(div);
+            });
+            document.querySelectorAll('.edit-buttons').forEach(b => {
+                if (isEditMode) b.classList.remove('hidden');
+            });
+        }
+
+        // 切换编辑模式
+        function toggleEditMode(on) {
+            isEditMode = on ?? !isEditMode;
+            document.querySelectorAll('.edit-buttons').forEach(b => b.classList.toggle('hidden', !isEditMode));
+            document.getElementById('addCategory').classList.toggle('hidden', !isEditMode);
+            document.getElementById('saveBtn').classList.toggle('hidden', !isEditMode);
+            document.getElementById('editBtn').textContent = isEditMode ? '完成' : '✏️ 编辑模式';
+        }
+
+        // 添加/编辑分类
+        window.editCategory = function(i) {
+            editingIndex = i;
+            document.getElementById('modalTitle').textContent = i === -1 ? '添加分类' : '编辑分类';
+            document.getElementById('catTitle').value = i === -1 ? '' : data[i].title;
+            const container = document.getElementById('linksContainer');
+            container.innerHTML = '';
+            const links = i === -1 ? [] : data[i].links;
+            links.forEach((link, idx) => addLinkRow(link.name, link.url, idx));
+            if (links.length === 0) addLinkRow();
+            document.getElementById('modal').classList.remove('hidden');
+        }
+
+        function addLinkRow(name = '', url = 'https://', idx = -1) {
+            const div = document.createElement('div');
+            div.className = 'flex space-x-3 mb-3';
+            div.innerHTML = `
+                <input type="text" placeholder="网站名称" value="${name}" class="flex-1 px-4 py-2 bg-gray-800 rounded">
+                <input type="url" placeholder="https://..." value="${url}" class="flex-1 px-4 py-2 bg-gray-800 rounded">
+                <button type="button" onclick="this.parentElement.remove()" class="text-red-400">×</button>
+            `;
+            document.getElementById('linksContainer').appendChild(div);
+        }
+
+        window.deleteCategory = function(i) {
+            if (confirm('确定删除这个分类？')) {
+                data.splice(i, 1);
+                render();
+            }
+        }
+
+        // 事件绑定
+        document.getElementById('editBtn').onclick = () => toggleEditMode();
+        document.getElementById('addCategory').onclick = () => editCategory(-1);
+        document.getElementById('saveBtn').onclick = saveData;
+        document.getElementById('addLink').onclick = () => addLinkRow();
+
+        document.getElementById('confirmBtn').onclick = () => {
+            const title = document.getElementById('catTitle').value.trim();
+            if (!title) return alert("分类名不能为空！");
+            const rows = document.querySelectorAll('#linksContainer > div');
+            const links = [];
+            for (let row of rows) {
+                const name = row.children[0].value.trim();
+                const url = row.children[1].value.trim();
+                if (name && url) links.push({name, url});
+            }
+            if (editingIndex === -1) {
+                data.push({title, links});
+            } else {
+                data[editingIndex] = {title, links};
+            }
+            render();
+            document.getElementById('modal').classList.add('hidden');
+        };
+
+        document.getElementById('cancelBtn').onclick = () => {
+            document.getElementById('modal').classList.add('hidden');
+        };
+
+        // 搜索
+        document.getElementById('search').addEventListener('input', e => {
+            const term = e.target.value.toLowerCase();
+            document.querySelectorAll('#categories > div').forEach(cat => {
+                const text = cat.textContent.toLowerCase();
+                cat.style.display = text.includes(term) ? '' : 'none';
+            });
+        });
+
+        loadData();
+    </script>
+</body>
+</html>
